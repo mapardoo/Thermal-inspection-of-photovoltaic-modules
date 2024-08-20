@@ -16,3 +16,94 @@ def get_one_hot_labels(keys, metadata, label_encoder, num_classes):
     labels_encoded = label_encoder.transform(labels)
     # Convierte las etiquetas codificadas a formato one-hot
     return to_categorical(labels_encoded, num_classes=num_classes)
+
+# Clase para generar datos en lotes de manera secuencial
+class DataGenerator(Sequence):
+    def __init__(self, keys, metadata, image_folder, label_encoder, num_classes=12, batch_size=32, dim=(40, 24), n_channels=1, shuffle=True):
+        # Inicializa los parámetros del generador de datos
+        self.keys = keys
+        self.metadata = metadata
+        self.image_folder = image_folder
+        self.label_encoder = label_encoder
+        self.num_classes = num_classes
+        self.batch_size = batch_size
+        self.dim = dim
+        self.n_channels = n_channels
+        self.shuffle = shuffle
+        self.on_epoch_end()  # Inicializa los índices y los baraja si es necesario
+
+    def __len__(self):
+        # Devuelve el número de lotes por época
+        return int(np.ceil(len(self.keys) / self.batch_size))
+
+    def __getitem__(self, index):
+        # Genera un lote de datos en el índice dado
+        batch_keys = self.keys[index * self.batch_size:(index + 1) * self.batch_size]
+        X, y = self.__data_generation(batch_keys)
+        return X, y
+
+    def on_epoch_end(self):
+        # Actualiza los índices después de cada época y los baraja si es necesario
+        self.indexes = np.arange(len(self.keys))
+        if self.shuffle:
+            np.random.shuffle(self.indexes)
+
+    def __data_generation(self, batch_keys):
+        # Genera datos y etiquetas para el lote proporcionado
+        X = np.zeros((len(batch_keys), *self.dim, self.n_channels), dtype=np.float32)
+        y = np.zeros((len(batch_keys), self.num_classes), dtype=np.float32)
+
+        for i, key in enumerate(batch_keys):
+            # Construye la ruta completa de la imagen
+            image_path = os.path.join(self.image_folder, self.metadata[key]['image_filepath'])
+            # Carga la imagen en escala de grises
+            img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Asegurarse de cargar la imagen en escala de grises
+            img = img.astype(np.float32) / 255.0
+
+            img = np.expand_dims(img, axis=-1)  # Añade una dimensión al final para los canales
+
+            # Asigna la imagen y la etiqueta one-hot al lote
+            X[i] = img
+            y[i] = get_one_hot_labels([key], self.metadata, self.label_encoder, self.num_classes)[0]
+
+        return X, y
+
+# Función para balancear las clases
+def balancear_clases(metadata, label_encoder):
+    all_labels = [metadata[key]['anomaly_class'] for key in metadata.keys()]
+    label_counts = Counter(all_labels)
+    most_common_classes = label_counts.most_common()
+
+    max_class = most_common_classes[0][0]
+    second_max_count = most_common_classes[1][1]
+
+    balanced_keys = []
+    class_counts = {key: 0 for key in label_counts.keys()}
+
+    for key in metadata.keys():
+        anomaly_class = metadata[key]['anomaly_class']
+        if anomaly_class == max_class and class_counts[max_class] <= second_max_count:
+            balanced_keys.append(key)
+            class_counts[max_class] += 1
+        elif anomaly_class != max_class:
+            balanced_keys.append(key)
+            class_counts[anomaly_class] += 1
+
+    return balanced_keys, label_encoder, len(label_encoder.classes_)
+
+# Función para obtener generadores de datos
+def obtener_generadores(path_file, image_folder, batch_size=32, test_size=0.2, random_state=42):
+    metadata = cargar_metadatos(path_file)
+
+    label_encoder = LabelEncoder()
+    all_labels = [metadata[key]['anomaly_class'] for key in metadata.keys()]
+    label_encoder.fit(all_labels)
+
+    balanced_keys, _, num_classes = balancear_clases(metadata, label_encoder)
+
+    train_keys, test_keys = train_test_split(balanced_keys, test_size=test_size, random_state=random_state)
+
+    train_generator = DataGenerator(train_keys, metadata, image_folder, label_encoder, num_classes, batch_size=batch_size, shuffle=True)
+    test_generator = DataGenerator(test_keys, metadata, image_folder, label_encoder, num_classes, batch_size=batch_size, shuffle=False)
+
+    return train_generator, test_generator, label_encoder, num_classes
