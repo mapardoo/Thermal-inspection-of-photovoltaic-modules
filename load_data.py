@@ -107,3 +107,40 @@ def obtener_generadores(path_file, image_folder, batch_size=32, test_size=0.2, r
     test_generator = DataGenerator(test_keys, metadata, image_folder, label_encoder, num_classes, batch_size=batch_size, shuffle=False)
 
     return train_generator, test_generator, label_encoder, num_classes
+
+# ###################### Just for visualizing #########################
+# # Ruta del archivo JSON y la carpeta de imágenes
+# path_file = 'C:/Users/USUARIO/Downloads/data_solar/InfraredSolarModules/module_metadata.json'
+# image_folder = 'C:/Users/USUARIO/Downloads/data_solar/InfraredSolarModules'
+
+# # Obtener generadores de datos
+# train_generator, test_generator = obtener_generadores(path_file, image_folder)
+
+# # Mostrar el número de muestras por cada clase en el conjunto de entrenamiento
+# class_counts_train = Counter([train_generator.metadata[key]['anomaly_class'] for key in train_generator.keys])
+# print("Número de muestras por clase en el conjunto de entrenamiento:")
+# for class_name, count in class_counts_train.items():
+#     print(f"Clase {class_name}: {count} muestras")
+
+# # Visualizar una imagen de cada clase
+# fig, axes = plt.subplots(nrows=1, ncols=len(class_counts_train), figsize=(15, 5))
+
+# for i, (class_name, _) in enumerate(class_counts_train.items()):
+#     # Encontrar la primera imagen de la clase actual
+#     for key in train_generator.keys:
+#         if train_generator.metadata[key]['anomaly_class'] == class_name:
+#             image_path = os.path.join(image_folder, train_generator.metadata[key]['image_filepath'])
+#             img = cv2.imread(image_path,cv2.IMREAD_GRAYSCALE)  # Cargar en escala de grises
+            
+#             if img is not None:
+#                 img_dimensions = img.shape
+#                 print(f"Clase {class_name} - Dimensiones: {img_dimensions}")
+                
+                    
+#                 axes[i].imshow(img.squeeze(), cmap='gray')
+#                 axes[i].text(0.5, 1.05, f'{class_name}\n({key})', horizontalalignment='center', verticalalignment='center', transform=axes[i].transAxes, fontsize=10)
+#                 axes[i].axis('off')
+#                 break
+
+# plt.tight_layout()
+# plt.show()
